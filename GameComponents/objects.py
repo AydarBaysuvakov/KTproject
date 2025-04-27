@@ -1,24 +1,23 @@
 import pygame
+from .image import load_image
 
 class Object(pygame.sprite.Sprite):
-    def __init__(self, group, image_name=None, size=(10, 10), take_size=False, colorkey=None, form='rect'):
+    def __init__(self, group, image_name=None, size=(10, 10), colorkey=None, form='rect'):
         super().__init__(group)
-        self.load_image(image_name, size, colorkey, form, take_size)
+        self.load_image(image_name, size, colorkey, form)
+        
         self.image = self.image_src.copy()
         self.rect = self.image.get_rect()
-        if take_size:
-            self.rect.w = size[0]
-            self.rect.h = size[1]
+        self.rect.w, self.rect.h = size
         self.mask = pygame.mask.from_surface(self.image)
 
-    def load_image(self, image_name, size, colorkey, form, take_size):
+    def load_image(self, image_name, size, colorkey, form):
         if image_name is None:
             self.image_src = pygame.Surface(size)
             self.image_src.fill(pygame.color.Color('white'))
-        #elif image_name[0] == 'Image':
-        #    self.image_src = load_image(image_name[1], colorkey=colorkey)
-        #    if take_size:
-        #        self.image_src = pygame.transform.scale(self.image_src, size)
+        elif image_name[0] == 'Image':
+            self.image_src = load_image(image_name[1], colorkey=colorkey)
+            self.image_src = pygame.transform.scale(self.image_src, size)
         elif image_name[0] == 'Color':
             self.image_src = pygame.Surface(size)
             if form == 'circle':
@@ -31,23 +30,36 @@ class Object(pygame.sprite.Sprite):
 class Wall(Object):
     def __init__(self, group, pos, type):
         size = [5, 40] if type else [40, 5]
-        super().__init__(group[0], ('Color', 'red'), size=size, take_size=True)
+        super().__init__(group[0], ('Color', 'red'), size=size)
         self.add(group[1])
-        self.rect.left = pos[0]
-        self.rect.top = pos[1]
+        self.rect.left, self.rect.top = pos
+        
+class Door(Object):
+    def __init__(self, group, pos, type, button_index):
+        size = [5, 40] if type else [40, 5]
+        super().__init__(group[0], ('Color', 'blue'), size=size)
+        self.add(group[1])
+        self.rect.left, self.rect.top = pos
+        self.button_index = button_index
+
+class Button(Object):
+    def __init__(self, group, pos, index):
+        super().__init__(group, ('Color', 'blue'), size=[30, 30], form='circle')
+        self.rect.left, self.rect.top = pos
+        self.index = index
         
 class Cup(Object):
     def __init__(self, group, pos):
-        super().__init__(group, ('Color', 'yellow'), size=[30, 30], take_size=True, form='circle')
-        self.rect.left = pos[0]
-        self.rect.top = pos[1]
+        super().__init__(group, ('Color', 'yellow'), size=[30, 30], form='circle')
+        self.rect.left, self.rect.top = pos
                 
 class Player(Object):
     Vx, Vy = 0, 0
     event = None
+    event_value = 0
 
-    def __init__(self, group, pos, window, image_name=['Color', 'blue'], form='circle'):
-        super().__init__(group, image_name, size=[30, 30], take_size=True)
+    def __init__(self, group, pos, window):
+        super().__init__(group, ('Color', 'white'), size=[30, 30], form='circle')
         self.rect.left, self.rect.top = pos
         self.window = window
 
@@ -88,3 +100,11 @@ class Player(Object):
             self.rect = self.rect.move(0, dir_y)
             if pygame.sprite.spritecollideany(self, self.window.walls):
                 self.rect = self.rect.move(0, -dir_y)
+                
+        if pygame.sprite.spritecollideany(self, [self.window.cup]):
+            self.event = 'win'
+        for button in self.window.buttons:
+            if pygame.sprite.spritecollideany(self, [button]):
+                self.event = 'button'
+                print('collide', button.index)
+                self.event_value = button
