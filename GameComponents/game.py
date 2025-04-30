@@ -8,4 +8,5 @@ class Game:
         self.start()
 
     def start(self):
-        self.window.show()
+        while self.window.show() in ('win', 'restart'):
+            self.window = GameWindow(self.screen)

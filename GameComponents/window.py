@@ -5,8 +5,15 @@ from .objects import *
 
 FPS = 60
 TITLE = 'Лабиринт'
-SIZE = WIDTH, HEIGHT = 700, 700
-MAP = COLS, ROWS = 15, 10
+SIZE = WIDTH, HEIGHT = 1280, 720
+MAP = COLS, ROWS = 16, 9
+SMOKE = True
+EXPLOSIONS = True
+EXPLOSION_FREQ = 600
+WARNING_TIME = EXPLOSION_FREQ // 6
+EXPLOSION_TIME = WARNING_TIME // 2
+EXPLOSION_COUNT = COLS * ROWS * 3 // 4
+GAME_END_EVENTS = ['restart', 'win', 'boom']
 
 def terminate():
     pygame.quit()
@@ -46,19 +53,24 @@ class Window:
         
 class GameWindow(Window):
     def __init__(self, screen):
-        super().__init__(screen)
+        super().__init__(screen, background=['Image', 'cosmos1.png'])
         self.new_level()
 
     def new_level(self):
         self.all_sprites = pygame.sprite.Group()
-        self.walls = pygame.sprite.Group()
-        self.doors = []
-        self.buttons = []
-        self.camera = Camera()
+        self.walls       = pygame.sprite.Group()
+        self.smoke       = pygame.sprite.Group()
+        self.warnings    = pygame.sprite.Group()
+        self.explosions  = pygame.sprite.Group()
+        self.doors       = []
+        self.buttons     = []
+        self.camera      = Camera()
+        self.zero        = Dummy(self.all_sprites)
         self.generate_level()
 
     def show(self):
         clock = pygame.time.Clock()
+        time_0 = pygame.time.get_ticks()
         run = True
         events = {}
         while run:
@@ -78,15 +90,20 @@ class GameWindow(Window):
                 if event.type == pygame.MOUSEBUTTONUP:
                     events[event.button] = False
             self.player.get_event(events)
-            if self.player.event == 'restart':
-                return 'restart'
-            if self.player.event == 'win':
-                print('win')
-                return 'win'
+            if self.player.event in GAME_END_EVENTS:
+                return self.player.event
             if self.player.event == 'button':
                 self.open_door()
             self.draw()
             clock.tick(FPS)
+            if EXPLOSIONS:
+                cycle = (pygame.time.get_ticks() - time_0) // 16
+                if cycle % EXPLOSION_FREQ == 0:
+                    self.Spawn_Explosion()
+                elif cycle % EXPLOSION_FREQ == WARNING_TIME:
+                    self.explosion()
+                elif cycle % EXPLOSION_FREQ == EXPLOSION_TIME + WARNING_TIME:
+                    self.clear_explosion()
         pygame.quit()
 
     def draw(self):
@@ -98,35 +115,37 @@ class GameWindow(Window):
         pygame.display.flip()
 
     def generate_level(self):
-        self.labirint = create_labirint(*MAP)
-        self.Spawn_Cup()
+        self.labirint = Labirint(*MAP).get_labirint()
+        self.Spawn_Portal()
         self.Spawn_Wall()
         self.Spawn_Player()
         self.Spawn_Door()
+        if SMOKE:
+            self.Spawn_Smoke()
 
     def Spawn_Player(self):
-        self.player = Player(self.all_sprites, (45 * self.labirint['start'][0] + 50, 45 * self.labirint['start'][1] + 50), self)
+        self.player = Player(self.all_sprites, (54 * self.labirint['start'][0] + 58, 54 * self.labirint['start'][1] + 58), self)
     
-    def Spawn_Cup(self):
-        self.cup    = Cup(self.all_sprites, (45 * self.labirint['finish'][0] + 50, 45 * self.labirint['finish'][1] + 50))
+    def Spawn_Portal(self):
+        self.portal = Portal(self.all_sprites, (54 * self.labirint['finish'][0] + 58, 54 * self.labirint['finish'][1] + 58))
 
     def Spawn_Wall(self):
         for i in range(ROWS + 1):
             for j in range(COLS + 1):
                 if (self.labirint['verticals'][i][j]):
-                    Wall([self.all_sprites, self.walls], (45 * j + 40, 45 * i), 1)
+                    Wall([self.all_sprites, self.walls], (54 * j + 48, 54 * i), 1)
                 if (self.labirint['horizonts'][i][j]):
-                    Wall([self.all_sprites, self.walls], (45 * j, 45 * i + 40), 0)
+                    Wall([self.all_sprites, self.walls], (54 * j, 54 * i + 48), 0)
     
     def Spawn_Door(self):
         for door in self.labirint['doors']:
             if door[0] == 'verticals':
-                self.doors.append(Door([self.all_sprites, self.walls], (45 * door[1][1] + 40, 45 * door[1][0]), 1, door[2]))
+                self.doors.append(Door([self.all_sprites, self.walls], (54 * door[1][1] + 48, 54 * door[1][0]), 1, door[2]))
             if door[0] == 'horizonts':
-                self.doors.append(Door([self.all_sprites, self.walls], (45 * door[1][1], 45 * door[1][0] + 40), 0, door[2]))
+                self.doors.append(Door([self.all_sprites, self.walls], (54 * door[1][1], 54 * door[1][0] + 48), 0, door[2]))
                 
         for button in self.labirint['buttons']:
-                self.buttons.append(Button(self.all_sprites, (45 * button[0] + 50, 45 * button[1] + 50), button[2]))
+                self.buttons.append(Button(self.all_sprites, (54 * button[0] + 60, 54 * button[1] + 60), button[2]))
         
     def open_door(self):
         for i, door in enumerate(self.doors):
@@ -137,6 +156,26 @@ class GameWindow(Window):
             if btn.index == self.player.event_value.index:
                 btn.kill()
                 self.buttons.pop(i)
+                
+    def Spawn_Smoke(self):
+        for i in range(ROWS + 1):
+            for j in range(COLS + 1):
+                Smoke([self.all_sprites, self.smoke], (54 * j, 54 * i))
+            
+    def Spawn_Explosion(self):
+        dx, dy = self.zero.rect.x, self.zero.rect.y
+        for i in range(EXPLOSION_COUNT):
+            x, y = (randint(0, COLS - 1), randint(0, ROWS - 1))
+            Warning([self.all_sprites, self.warnings], (54 * x + 60 + dx, 54 * y + 60 + dy))
+    
+    def explosion(self):
+        for warning in self.warnings:
+            Explosion([self.all_sprites, self.explosions], (warning.rect.x, warning.rect.y))
+            warning.kill()
+    
+    def clear_explosion(self):
+        for explosion in self.explosions:
+            explosion.kill()
     
 class Camera:
     def __init__(self):
