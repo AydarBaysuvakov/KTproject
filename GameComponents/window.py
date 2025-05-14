@@ -2,14 +2,17 @@ import pygame
 import sys
 from .labirint import *
 from .objects import *
+from .bot import *
 
 FPS = 60
 TITLE = 'Лабиринт'
 SIZE = WIDTH, HEIGHT = 1280, 720
-MAP = COLS, ROWS = 16, 9
-SMOKE = True
-EXPLOSIONS = True
+MAP = COLS, ROWS = 6, 6
+BOT = True
+SMOKE = False
+EXPLOSIONS = False
 EXPLOSION_FREQ = 600
+MOVE_FREQ = 30
 WARNING_TIME = EXPLOSION_FREQ // 6
 EXPLOSION_TIME = WARNING_TIME // 2
 EXPLOSION_COUNT = COLS * ROWS * 3 // 4
@@ -96,14 +99,24 @@ class GameWindow(Window):
                 self.open_door()
             self.draw()
             clock.tick(FPS)
+            cycle = (pygame.time.get_ticks() - time_0) // 16
             if EXPLOSIONS:
-                cycle = (pygame.time.get_ticks() - time_0) // 16
                 if cycle % EXPLOSION_FREQ == 0:
                     self.Spawn_Explosion()
                 elif cycle % EXPLOSION_FREQ == WARNING_TIME:
                     self.explosion()
                 elif cycle % EXPLOSION_FREQ == EXPLOSION_TIME + WARNING_TIME:
                     self.clear_explosion()
+            if BOT:
+                if cycle % MOVE_FREQ == 0:
+                    cell = self.path[self.index]
+                    player_pos = self.player.rect
+                    zero_pos = self.zero.rect
+                    x, y = player_pos.left - zero_pos.left, player_pos.top - zero_pos.top
+                    dx, dy = x - cell[0] * 54 - 58, y - cell[1] * 54 - 58
+                    self.player.rect.left -= dx
+                    self.player.rect.top  -= dy
+                    self.index += 1
         pygame.quit()
 
     def draw(self):
@@ -116,12 +129,26 @@ class GameWindow(Window):
 
     def generate_level(self):
         self.labirint = Labirint(*MAP).get_labirint()
+        while not self.check():
+            self.labirint = Labirint(*MAP).get_labirint()
+        self.path = []
+        for i in self.way:
+            if type(i) == list:
+                self.path.extend(i)
+        print(self.path)
+        self.index = 0
         self.Spawn_Portal()
         self.Spawn_Wall()
         self.Spawn_Player()
         self.Spawn_Door()
         if SMOKE:
             self.Spawn_Smoke()
+            
+    def check(self):
+        self.way = Bot(self.labirint).get_way()
+        if False in self.way or not self.way or len(self.way) != (Labirint.doors + 1) * 2:
+            return False
+        return True
 
     def Spawn_Player(self):
         self.player = Player(self.all_sprites, (54 * self.labirint['start'][0] + 58, 54 * self.labirint['start'][1] + 58), self)

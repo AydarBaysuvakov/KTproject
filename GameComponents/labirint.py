@@ -3,9 +3,18 @@ from random import randint
 import json
 
 class Labirint:
-    doors = 10
+    doors = 3
+    free_space = 3 # сколько отводится места для закрытой ячейки лабиринта
     
     def __init__(self, cols, rows):
+        valid = False
+        while not valid:
+            valid = self.generate_level(cols, rows)
+                
+        #self.store_level()
+        self.store_level('Data/level.json')
+        
+    def generate_level(self, cols, rows):
         self.labirint = {'cols': cols, 'rows': rows,
                         'verticals': [], 'horizonts': [],
                         'start': (0, 0), 'finish': (0, 0),
@@ -16,8 +25,7 @@ class Labirint:
         self.generate_labirint()
         for i in range(self.doors):
             self.generate_door(i)
-        #self.store_level()
-        self.store_level('Data/level.json')
+        return True
         
     def get_labirint(self):
         return self.labirint
@@ -77,46 +85,52 @@ class Labirint:
         self.labirint['finish'] = (randint(0, self.labirint['cols'] - 1), randint(0, self.labirint['rows'] - 1))
         while (self.labirint['start'][0] == self.labirint['finish'][0] or self.labirint['start'][1] == self.labirint['finish'][1]):
             self.labirint['finish'] = (randint(0, self.labirint['cols'] - 1), randint(0, self.labirint['rows'] - 1))
-        self.labirint['spawn_target'].append((self.labirint['start'], self.labirint['finish']))
+        self.labirint['spawn_target'].append((self.labirint['start'], self.labirint['finish'], 0))
 
     def generate_door(self, index):
         door = 'verticals' if randint(0, 1) else 'horizonts'
         
         if door == 'verticals':
             i, j = randint(1, self.labirint['rows']), randint(1, self.labirint['cols'] - 1)
-            while self.labirint[door][i][j]:
+            while self.labirint['verticals'][i][j]:
                 i, j = randint(1, self.labirint['rows']), randint(1, self.labirint['cols'] - 1)
+            p1 = [j - 1, i - 1]
+            p2 = [j    , i - 1]
         elif door == 'horizonts':
             i, j = randint(1, self.labirint['rows'] - 1), randint(1, self.labirint['cols'])
-            while self.labirint[door][i][j]:
+            while self.labirint['horizonts'][i][j]:
                 i, j = randint(1, self.labirint['rows'] - 1), randint(1, self.labirint['cols'])
-            
-        self.generate_button(door, [i, j], index)
-        self.labirint['doors'].append((door, [i, j], index))
-
-    def generate_button(self, door, door_pos, index):
-        if door == 'verticals':
-            p1 = [door_pos[1] - 1, door_pos[0] - 1]
-            p2 = [door_pos[1]    , door_pos[0] - 1]
-        elif door == 'horizonts':
-            p1 = [door_pos[1] - 1, door_pos[0] - 1]
-            p2 = [door_pos[1] - 1, door_pos[0]    ]
+            p1 = [j - 1, i - 1]
+            p2 = [j - 1, i    ]
             
         old_group = self.labirint['groups'][p1[1]][p1[0]]
-        for i, grp in enumerate(self.labirint['spawn_target']):
-            if self.labirint['groups'][grp[0][1]][grp[0][0]] == old_group:
-                start_pos, finish_pos = grp[0], grp[1]
+        group1, group2 = index * 2 + 1, index * 2 + 2
+        self.labirint[door][i][j] = 1
+        if not self.new_groups((p1, group1), (p2, group2), old_group):
+            self.labirint[door][i][j] = 0
+            self.generate_door(index)
+            return
+        self.labirint[door][i][j] = 0
+        self.labirint['doors'].append((door, [i, j], index))
+            
+        return self.generate_button(old_group, p1, p2, index)
+
+    def generate_button(self, old_group, p1, p2, index):
+        found = False
+        for i in range(len(self.labirint['spawn_target'])):
+            if self.labirint['spawn_target'][i][2] == old_group:
+                start_pos, finish_pos = self.labirint['spawn_target'][i][:2]
                 self.labirint['spawn_target'].pop(i)
-                
-        self.labirint[door][door_pos[0]][door_pos[1]] = 1
-        group_1, group_2 = index * 2 + 1, index * 2 + 2
-        self.find_path(p1, old_group, group_1)
-        self.find_path(p2, old_group, group_2)
-        self.labirint[door][door_pos[0]][door_pos[1]] = 0
+                found = True
+                break
+        if not found:
+            return False
         
         start_grp, finish_grp = self.labirint['groups'][start_pos[1]][start_pos[0]], self.labirint['groups'][finish_pos[1]][finish_pos[0]]
         if start_grp == finish_grp:
-            grp = group_1 if start_grp == group_2 else group_2
+            group1, group2 = index * 2 + 1, index * 2 + 2
+            grp = group1 if start_grp == group2 else group2
+            
             x, y = (randint(0, self.labirint['cols'] - 1), randint(0, self.labirint['rows'] - 1))
             while self.labirint['groups'][y][x] != grp:
                 x, y = (randint(0, self.labirint['cols'] - 1), randint(0, self.labirint['rows'] - 1))
@@ -130,20 +144,30 @@ class Labirint:
                         
             self.labirint['buttons'].append([finish_pos[0], finish_pos[1], index])
                         
-            self.labirint['spawn_target'].append((start_pos, finish_pos))
+            self.labirint['spawn_target'].append((start_pos, finish_pos, start_grp))
             p2_grp = self.labirint['groups'][p2[1]][p2[0]]
-            self.labirint['spawn_target'].append((p1 if p2_grp == start_grp else p2, (x, y)))
+            self.labirint['spawn_target'].append((p1 if p2_grp == start_grp else p2, (x, y), grp))
         else:
             x, y = (randint(0, self.labirint['cols'] - 1), randint(0, self.labirint['rows'] - 1))
-            while self.labirint['groups'][y][x] != start_grp:
+            while self.labirint['groups'][y][x] != start_grp and self.labirint['groups'][y][x] == start_pos:
                 x, y = (randint(0, self.labirint['cols'] - 1), randint(0, self.labirint['rows'] - 1))
             self.labirint['buttons'].append([x, y, index])
             
-            self.labirint['spawn_target'].append((start_pos, (x, y)))
+            self.labirint['spawn_target'].append((start_pos, (x, y), start_grp))
             p2_grp = self.labirint['groups'][p2[1]][p2[0]]
-            self.labirint['spawn_target'].append((p1 if p2_grp == start_grp else p2, finish_pos))
+            self.labirint['spawn_target'].append((p1 if p2_grp == start_grp else p2, finish_pos, finish_grp))
+        return True
                 
-        
+    def new_groups(self, g1, g2, old_val):
+        q1 = self.find_path(g1[0], old_val, g1[1])
+        q2 = self.find_path(g2[0], old_val, g2[1])
+        if len(q1) < self.free_space or len(q2) < self.free_space:
+            for p in q1:
+                self.labirint['groups'][p[1]][p[0]] = old_val
+            for p in q2:
+                self.labirint['groups'][p[1]][p[0]] = old_val
+            return False
+        return True
         
     def find_path(self, pos, old_val, new_val):
         query = [pos]
@@ -160,6 +184,7 @@ class Labirint:
             if not self.labirint['horizonts'][y][x + 1] and old_val ==  self.labirint['groups'][y - 1][x]:
                 query.append([x, y - 1])
             i += 1
+        return query
 
     def store_level(self, file_name=None):
         if file_name is None:

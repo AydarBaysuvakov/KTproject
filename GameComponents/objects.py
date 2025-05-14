@@ -83,11 +83,12 @@ class Portal(Object):
 
 class Dummy(Object):
     def __init__(self, group):
-        super().__init__(group, ('Color', 'white'), size=[2, 2], form='circle')
+        super().__init__(group, ('Color', 'white'), size=[5, 5], form='circle')
         self.rect.left, self.rect.top = (0, 0)
                 
 class Player(Object):
     Vx, Vy = 0, 0
+    V = 4
     event = None
     event_value = 0
 
@@ -102,13 +103,13 @@ class Player(Object):
         
         for key, value in events.items():
             if key == pygame.K_UP and value:
-                self.Vy = -4
+                self.Vy = -self.V
             if key == pygame.K_DOWN and value:
-                self.Vy = 4
+                self.Vy = self.V
             if key == pygame.K_RIGHT and value:
-                self.Vx = 4
+                self.Vx = self.V
             if key == pygame.K_LEFT and value:
-                self.Vx = -4
+                self.Vx = -self.V
                 
         if (pygame.K_UP in events and not events[pygame.K_UP]) and (pygame.K_DOWN not in events):
             self.Vy = 0
